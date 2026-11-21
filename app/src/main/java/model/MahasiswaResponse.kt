@@ -21,3 +21,11 @@ data class Mahasiswa(
     @SerializedName("jurusan")
     val jurusan: String
 )
+data class MahasiswaDetailResponse(
+    @SerializedName("status")
+    val status: Boolean,
+    @SerializedName("message")
+    val message: String? = null,
+    @SerializedName("data")
+    val data: Mahasiswa? = null
+)

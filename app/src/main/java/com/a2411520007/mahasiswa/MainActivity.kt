@@ -1,12 +1,15 @@
 package com.a2411520007.mahasiswa
 
-import android.graphics.Color
 import android.os.Bundle
 import android.view.View
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.a2411520007.mahasiswa.databinding.ActivityMainBinding
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.a2411520007.mahasiswa.adapter.MahasiswaAdapter
 import com.a2411520007.mahasiswa.api.ApiConfig
+import com.a2411520007.mahasiswa.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -15,65 +18,140 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 
 class MainActivity : AppCompatActivity() {
+
     private lateinit var binding: ActivityMainBinding
+    private lateinit var adapter: MahasiswaAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Tombol uji koneksi diklik
-        binding.btnTestConnection.setOnClickListener {
-            cekKoneksiApi()
+        setupRecyclerView()
+        setupActions()
+        loadData()
+    }
+
+    private fun setupRecyclerView() {
+        adapter = MahasiswaAdapter { mahasiswa ->
+            showDetail(mahasiswa.id)
+        }
+        binding.rvMahasiswa.layoutManager = LinearLayoutManager(this)
+        binding.rvMahasiswa.adapter = adapter
+    }
+
+    private fun setupActions() {
+        binding.btnTambah.setOnClickListener {
+            Toast.makeText(
+                this,
+                "Form tambah dibahas di P11",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        binding.btnCari.setOnClickListener {
+            val keyword = binding.etSearch.text.toString().trim()
+            loadData(keyword.ifEmpty { null })
+        }
+
+        binding.btnReset.setOnClickListener {
+            binding.etSearch.text?.clear()
+            loadData()
         }
     }
 
-    private fun cekKoneksiApi() {
-        // 1. Tampilkan loading dan status awal
+    private fun loadData(keyword: String? = null) {
         binding.progressBar.visibility = View.VISIBLE
-        binding.btnTestConnection.isEnabled = false
-        updateStatus("Status: Menghubungkan ke server...", Color.DKGRAY)
+        binding.tvEmpty.visibility = View.GONE
 
-        // 2. Jalankan request secara asynchronous menggunakan Coroutine
         lifecycleScope.launch {
             try {
                 val response = withContext(Dispatchers.IO) {
-                    ApiConfig.getApiService().getDaftarMahasiswa()
+                    if (keyword.isNullOrEmpty()) {
+                        ApiConfig.getApiService().getDaftarMahasiswa()
+                    } else {
+                        ApiConfig.getApiService().searchMahasiswa(keyword)
+                    }
                 }
 
-                // 3. Penanganan HTTP Response
                 if (response.isSuccessful) {
-                    val body = response.body()
-                    val jumlahData = body?.data?.size ?: 0
-                    updateStatus(
-                        "Status: Terhubung (HTTP ${response.code()})\n" +
-                                "Pesan: ${body?.message ?: "OK"} ($jumlahData data ditemukan)",
-                        Color.parseColor("#2E7D32") // Hijau
-                    )
+                    val list = response.body()?.data.orEmpty()
+                    adapter.updateData(list)
+                    binding.tvTitle.text = "Data Mahasiswa (${list.size})"
+
+                    if (list.isEmpty()) {
+                        binding.tvEmpty.visibility = View.VISIBLE
+                        binding.tvEmpty.text = if (keyword.isNullOrEmpty()) {
+                            "Belum ada data"
+                        } else {
+                            "Tidak ditemukan untuk \"$keyword\""
+                        }
+                    } else {
+                        binding.tvEmpty.visibility = View.GONE
+                    }
                 } else {
-                    updateStatus(
-                        "Status: Gagal merespons (HTTP ${response.code()} ${response.message()})",
-                        Color.parseColor("#C62828") // Merah
-                    )
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Gagal memuat (HTTP ${response.code()})",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    binding.tvEmpty.visibility = View.VISIBLE
+                    binding.tvEmpty.text = "Gagal memuat (HTTP ${response.code()})"
                 }
             } catch (e: SocketTimeoutException) {
-                updateStatus("Status: Timeout Server terlalu lama merespons.", Color.parseColor("#C62828"))
+                binding.tvEmpty.visibility = View.VISIBLE
+                binding.tvEmpty.text = "Timeout: periksa IP & port server."
             } catch (e: IOException) {
-                updateStatus("Status: Gagal terhubung ke jaringan (${e.localizedMessage})", Color.parseColor("#C62828"))
+                binding.tvEmpty.visibility = View.VISIBLE
+                binding.tvEmpty.text = "Gagal terhubung (${e.localizedMessage})"
             } catch (e: HttpException) {
-                updateStatus("Status: Kesalahan HTTP (${e.code()})", Color.parseColor("#C62828"))
+                binding.tvEmpty.visibility = View.VISIBLE
+                binding.tvEmpty.text = "Kesalahan HTTP (${e.code()})"
             } catch (e: Exception) {
-                updateStatus("Status: Terjadi kesalahan (${e.localizedMessage})", Color.parseColor("#C62828"))
+                binding.tvEmpty.visibility = View.VISIBLE
+                binding.tvEmpty.text = "Terjadi kesalahan (${e.localizedMessage})"
             } finally {
-                // Sembunyikan loading & aktifkan tombol kembali
                 binding.progressBar.visibility = View.GONE
-                binding.btnTestConnection.isEnabled = true
             }
         }
     }
 
-    private fun updateStatus(pesan: String, warna: Int) {
-        binding.tvConnectionStatus.text = pesan
-        binding.tvConnectionStatus.setTextColor(warna)
+    private fun showDetail(id: String) {
+        lifecycleScope.launch {
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    ApiConfig.getApiService().getDetailMahasiswa(id)
+                }
+
+                if (response.isSuccessful) {
+                    val m = response.body()?.data
+                    if (m != null) {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle(m.nama)
+                            .setMessage("ID: ${m.id}\nNIM: ${m.nim}\nJurusan: ${m.jurusan}")
+                            .setPositiveButton("Tutup", null)
+                            .show()
+                    } else {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Data tidak ditemukan",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Detail gagal (HTTP ${response.code()})",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Gagal memuat detail (${e.localizedMessage})",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 }
