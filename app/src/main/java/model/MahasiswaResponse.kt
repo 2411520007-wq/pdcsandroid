@@ -29,3 +29,12 @@ data class MahasiswaDetailResponse(
     @SerializedName("data")
     val data: Mahasiswa? = null
 )
+data class MahasiswaPostResponse(
+    @SerializedName("status") val status: Boolean,
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("data") val data: PostId? = null
+)
+
+data class PostId(
+    @SerializedName("id") val id: String? = null
+)

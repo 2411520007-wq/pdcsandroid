@@ -8,7 +8,9 @@ import com.a2411520007.mahasiswa.model.Mahasiswa
 
 class MahasiswaAdapter(
     private var items: List<Mahasiswa> = emptyList(),
-    private val onItemClick: (Mahasiswa) -> Unit = {}
+    private val onItemClick: (Mahasiswa) -> Unit = {},
+    private val onEdit: (Mahasiswa) -> Unit = {},
+    private val onHapus: (Mahasiswa) -> Unit = {}
 ) : RecyclerView.Adapter<MahasiswaAdapter.ViewHolder>() {
 
     inner class ViewHolder(
@@ -20,6 +22,8 @@ class MahasiswaAdapter(
             binding.tvNim.text = "NIM: ${m.nim}"
             binding.tvJurusan.text = m.jurusan
             binding.root.setOnClickListener { onItemClick(m) }
+            binding.btnEdit.setOnClickListener { onEdit(m) }
+            binding.btnHapus.setOnClickListener { onHapus(m) }
         }
     }
 
